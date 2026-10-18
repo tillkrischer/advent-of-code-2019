@@ -25,13 +25,26 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+long fuel_req(long mass) {
+    long sum = 0;
+    mass = mass / 3 - 2;
+    while (mass > 0) {
+        sum += mass;
+        mass = mass / 3 - 2;
+    }
+    return sum;
+}
+
 void parse_file(FILE *f) {
     char line[4000];
     long m = 0;
-    long sum = 0;
+    long sum1 = 0;
+    long sum2 = 0;
     while (fgets(line, sizeof(line), f)) {
-        sscanf(line, "%lu", &m);
-        sum += m / 3 - 2;
+        sscanf(line, "%lu", &m);\
+        sum1 += m / 3 - 2;
+        sum2 += fuel_req(m);
     }
-    printf("%lu\n", sum);
+    printf("%lu\n", sum1);
+    printf("%lu\n", sum2);
 }
