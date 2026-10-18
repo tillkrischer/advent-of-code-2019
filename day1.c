@@ -35,15 +35,13 @@ long fuel_req(long mass) {
 }
 
 void parse_file(FILE *f) {
-    char line[4000];
     long m = 0;
     long sum1 = 0;
     long sum2 = 0;
-    while (fgets(line, sizeof(line), f)) {
-        sscanf(line, "%lu", &m);\
+    while (fscanf(f, "%ld", &m) == 1) {
         sum1 += m / 3 - 2;
         sum2 += fuel_req(m);
     }
-    printf("%lu\n", sum1);
-    printf("%lu\n", sum2);
+    printf("%ld\n", sum1);
+    printf("%ld\n", sum2);
 }
