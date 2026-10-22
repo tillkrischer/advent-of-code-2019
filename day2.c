@@ -82,13 +82,29 @@ void restore_program(long *program) {
 int parse_file(FILE *f) {
     char line[4000];
     long program[200];
+    long orig_program[200];
     long program_size = 0;
+    long res;
 
     while (fgets(line, sizeof(line), f) != NULL) {
-        parse_program(line, program, &program_size);
+        parse_program(line, orig_program, &program_size);
+        memcpy(program, orig_program, sizeof(long) * program_size);
         restore_program(program);
-        long res = evaluate(program, program_size);
-        printf("%lu", res);
+        res = evaluate(program, program_size);
+        printf("%lu\n", res);
+        for(long i = 0; i <= 100; i++) {
+            for(long j = 0; j <= 100; j++) {
+                memcpy(program, orig_program, sizeof(long) * program_size);
+                program[1] = i;
+                program[2] = j;
+                res = evaluate(program, program_size);
+                if (res == 19690720) {
+                    // printf("%lu %lu: %lu\n", i, j, res);
+                    long part2 = 100 * i + j;
+                    printf("%lu\n", part2);
+                }
+            }
+        }
 
         program_size = 0;
     }
