@@ -1,28 +1,24 @@
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"
 #include <limits.h>
 #include <stdio.h>
-#include "uthash.h"
-#include "utarray.h"
 
-struct string_entry {
-    char key[20];
-    long steps;
-    UT_hash_handle hh;
-};
+typedef struct {
+    long x, y;
+} Position;
 
-struct wire_segment {
+typedef struct {
+    Position key;
+    long value;
+} VisitedPoint;
+
+typedef struct {
     char dir;
     long len;
-};
-UT_icd wire_segement_icd = {sizeof(struct wire_segment), NULL, NULL, NULL};
-UT_array *wire1;
-UT_array *wire2;
+}  WireSegment;
 
-int parse_file(FILE *f);
-void solve();
-void get_deltas(char dir, long *dx, long *dy);
-int visit(struct string_entry **visited, long x, long y, long dist);
-void print_visited(struct string_entry **visited);
-long is_visited(struct string_entry **visited, long x, long y);
+int parse_file(FILE *f, WireSegment **wire1, WireSegment **wire2);
+void solve(WireSegment *wire1, WireSegment *wire2);
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -36,9 +32,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int parse_error = parse_file(f);
+    WireSegment *wire1 = NULL;
+    WireSegment *wire2 = NULL;
+    int parse_error = parse_file(f, &wire1, &wire2);
     if (!parse_error) {
-        solve();
+        solve(wire1, wire2);
     } else {
         perror("parse error");
     }
@@ -51,39 +49,55 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void solve() {
-    struct string_entry *visited = NULL; 
-    long steps = 0;
-    long x = 0, y = 0;
-    long dx, dy;
-    long other_steps;
-    struct wire_segment *p; 
-    long dist, step_dist;
+Position get_delta(char dir) {
+    switch (dir) {
+    case 'U':
+        return (Position){0, -1};
+        break;
+    case 'D':
+        return (Position){0, 1};
+        break;
+    case 'L':
+        return (Position){-1, 0};
+        break;
+    case 'R':
+        return (Position){1, 0};
+        break;
+    default:
+        return (Position){0, 0};
+    }
+}
+
+void solve(WireSegment *wire1, WireSegment *wire2) {
+    VisitedPoint *visited = NULL;
     long part1 = LONG_MAX;
     long part2 = LONG_MAX;
-
-    for (p = (struct wire_segment*)utarray_front(wire1); p != NULL; p = utarray_next(wire1, p)) {
-        get_deltas(p->dir, &dx, &dy) ;
-        for (long i = 0; i < p->len; i++) {
-            x += dx;
-            y += dy;
+    long steps = 0;
+    Position curr = {0, 0};
+    for (int i = 0; i < arrlen(wire1); ++i) {
+        for (int j = 0; j < wire1[i].len; ++j) {
+            Position d = get_delta(wire1[i].dir);
+            curr.x += d.x;
+            curr.y += d.y;
             steps += 1;
-            visit(&visited, x, y, steps);
+            if (hmgeti(visited, curr) == -1) {
+                hmput(visited, curr, steps);
+            }
         }
     }
 
     steps = 0;
-    x = 0, y = 0;
-    for (p = (struct wire_segment*)utarray_front(wire2); p != NULL; p = utarray_next(wire2, p)) {
-        get_deltas(p->dir, &dx, &dy) ;
-        for (long i = 0; i < p->len; i++) {
-            x += dx;
-            y += dy;
+    curr = (Position){0, 0};
+    for (int i = 0; i < arrlen(wire2); ++i) {
+        for (int j = 0; j < wire2[i].len; ++j) {
+            Position d = get_delta(wire2[i].dir);
+            curr.x += d.x;
+            curr.y += d.y;
             steps += 1;
-            other_steps = is_visited(&visited, x, y);
-            if (other_steps > 0) {
-                dist = labs(x) + labs(y);
-                step_dist = steps + other_steps;
+            if (hmgeti(visited, curr) != -1) {
+                long other_steps = hmget(visited, curr);
+                long dist = labs(curr.x) + labs(curr.y);
+                long step_dist = other_steps + steps;
                 if (dist < part1) {
                     part1 = dist;
                 }
@@ -96,78 +110,30 @@ void solve() {
 
     printf("%ld\n", part1);
     printf("%ld\n", part2);
-
-    // print_visited(&visited);
 }
 
-int visit(struct string_entry **visited, long x, long y, long steps) {
-    struct string_entry *s;
-    char key[20];
-    sprintf(key, "%ld,%ld", x, y);
-    HASH_FIND_STR(*visited, key, s);
-    if (s == NULL) {
-        s = malloc(sizeof *s);
-        if (!s)
-            return 1;
-        sprintf(s->key, "%ld,%ld", x, y);
-        s->steps = steps;
-        HASH_ADD_STR(*visited, key, s);
+int parse_wire(char *line, WireSegment **wire) {
+    char *p = line;
+    while (*p != '\0' && *p != '\n') {
+        WireSegment seg;
+        seg.dir = *p++;
+        seg.len = strtol(p, &p, 10);
+        arrput(*wire, seg);
+
+        if (*p == ',')
+            p++;
     }
     return 0;
 }
 
-long is_visited(struct string_entry **visited, long x, long y) {
-    struct string_entry *s;
-    char key[20];
-    sprintf(key, "%ld,%ld", x, y);
-    HASH_FIND_STR(*visited, key, s);
-    if (s == NULL) 
-        return 0;
-    return s->steps;
-}
-
-void get_deltas(char dir, long *dx, long *dy) {
-    *dx = 0;
-    *dy = 0;
-    if (dir == 'R')
-        *dx = 1;
-    else if (dir == 'L')
-        *dx = -1;
-    else if (dir == 'U')
-        *dy = -1;
-    else if (dir == 'D')
-        *dy = 1;
-}
-
-void print_visited(struct string_entry **visited) {
-    struct string_entry *s;
-    for (s = *visited; s != NULL; s = s->hh.next) {
-        printf("%s: %ld\n", s->key, s->steps);
-    }
-}
-
-int parse_wire(char *line, UT_array **wire) {
-    struct wire_segment seg; 
-    utarray_new(*wire, &wire_segement_icd);
-    char *token = strtok(line, ",");
-    while (token != NULL) {
-        seg.dir = token[0];
-        seg.len = strtol(token+1, NULL, 10);
-        utarray_push_back(*wire, &seg);
-        token = strtok(NULL, ",");
-    }
-    return 0;
-}
-
-int parse_file(FILE *f) {
+int parse_file(FILE *f, WireSegment **wire1, WireSegment **wire2) {
     char line[4000];
-
     if (fgets(line, sizeof(line), f) == NULL)
         return 1;
-    parse_wire(line, &wire1);
+    parse_wire(line, wire1);
     if (fgets(line, sizeof(line), f) == NULL)
         return 1;
-    parse_wire(line, &wire2);
+    parse_wire(line, wire2);
 
     return 0;
 }
