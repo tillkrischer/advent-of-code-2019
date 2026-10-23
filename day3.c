@@ -160,21 +160,14 @@ int parse_wire(char *line, UT_array **wire) {
 }
 
 int parse_file(FILE *f) {
-    // struct string_entry *visited = NULL; 
     char line[4000];
-    
-    if (fgets(line, sizeof(line), f) == NULL) return 1;
+
+    if (fgets(line, sizeof(line), f) == NULL)
+        return 1;
     parse_wire(line, &wire1);
-    if (fgets(line, sizeof(line), f) == NULL) return 1;
+    if (fgets(line, sizeof(line), f) == NULL)
+        return 1;
     parse_wire(line, &wire2);
-    
-    // struct wire_segment *p; 
-    // for (p = (struct wire_segment*)utarray_front(wire1); p != NULL; p = utarray_next(wire1, p)) {
-    //     printf("%c - %ld\n", p->dir, p->len);
-    // }
-    // for (p = (struct wire_segment*)utarray_front(wire2); p != NULL; p = utarray_next(wire2, p)) {
-    //     printf("%c - %ld\n", p->dir, p->len);
-    // }
 
     return 0;
 }
