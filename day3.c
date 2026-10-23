@@ -1,13 +1,23 @@
 #include <limits.h>
 #include <stdio.h>
 #include "uthash.h"
+#include "utarray.h"
 
 struct string_entry {
     char key[20];
     UT_hash_handle hh;
 };
 
+struct wire_segment {
+    char dir;
+    long len;
+};
+UT_icd wire_segement_icd = {sizeof(struct wire_segment), NULL, NULL, NULL};
+UT_array *wire1;
+UT_array *wire2;
+
 int parse_file(FILE *f);
+void solve();
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -21,9 +31,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (parse_file(f)) {
+    int parse_error = parse_file(f);
+    if (!parse_error) {
+        solve();
+    } else {
         perror("parse error");
-        return 1;
     }
 
     if (ferror(f)) {
@@ -32,6 +44,9 @@ int main(int argc, char *argv[]) {
 
     fclose(f);
     return 0;
+}
+
+void solve() {
 }
 
 int visit(struct string_entry **visited, long x, long y) {
@@ -77,52 +92,35 @@ void print_visited(struct string_entry **visited) {
     }
 }
 
+int parse_wire(char *line, UT_array **wire) {
+    struct wire_segment seg; 
+    utarray_new(*wire, &wire_segement_icd);
+    char *token = strtok(line, ",");
+    while (token != NULL) {
+        seg.dir = token[0];
+        seg.len = strtol(token+1, NULL, 10);
+        utarray_push_back(*wire, &seg);
+        token = strtok(NULL, ",");
+    }
+    return 0;
+}
+
 int parse_file(FILE *f) {
-    char dir, delim;
-    long len, dx, dy, dist;
-    long x = 0;
-    long y = 0;
-    long min_dist = LONG_MAX;
-    struct string_entry *visited = NULL; 
-
-    while (fscanf(f, "%c%ld", &dir, &len) == 2) {
-        // printf("%c - %ld\n", dir, len);
-        get_deltas(dir, &dx, &dy);
-        for (long i = 0; i < len; i++) {
-            x += dx;
-            y += dy;
-            visit(&visited, x, y);
-        }
-
-        delim = fgetc(f);
-        if (delim != ',')
-            break;
-    }
+    // struct string_entry *visited = NULL; 
+    char line[4000];
     
-    // print_visited(&visited);
-
-    x = 0;
-    y = 0;
-    while (fscanf(f, "%c%ld", &dir, &len) == 2) {
-        // printf("%c - %ld\n", dir, len);
-        get_deltas(dir, &dx, &dy);
-        for (long i = 0; i < len; i++) {
-            x += dx;
-            y += dy;
-            if (is_visited(&visited, x, y)) {
-                dist = labs(x) + labs(y);
-                if (dist < min_dist) {
-                    min_dist = dist;
-                }
-            }
-        }
-
-        delim = fgetc(f);
-        if (delim != ',')
-            break;
-    }
-
-    printf("%ld\n", min_dist);
+    if (fgets(line, sizeof(line), f) == NULL) return 1;
+    parse_wire(line, &wire1);
+    if (fgets(line, sizeof(line), f) == NULL) return 1;
+    parse_wire(line, &wire2);
+    
+    // struct wire_segment *p; 
+    // for (p = (struct wire_segment*)utarray_front(wire1); p != NULL; p = utarray_next(wire1, p)) {
+    //     printf("%c - %ld\n", p->dir, p->len);
+    // }
+    // for (p = (struct wire_segment*)utarray_front(wire2); p != NULL; p = utarray_next(wire2, p)) {
+    //     printf("%c - %ld\n", p->dir, p->len);
+    // }
 
     return 0;
 }
