@@ -2,6 +2,7 @@
 #include "stb_ds.h"
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stddef.h>
 
 static int parse_file(FILE *f, long *start, long *end);
@@ -10,29 +11,37 @@ static void solve(long start, long end);
 int main(int argc, char *argv[]) {
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <path>\n", argv[0]);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     FILE *f = fopen(argv[1], "r");
     if (!f) {
         perror("fopen");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     long start, end;
     int parse_error = parse_file(f, &start, &end);
-    if (!parse_error) {
-        solve(start, end);
-    } else {
-        fprintf(stderr, "Failed to parse input\n");
-    }
+    int status = EXIT_SUCCESS;
 
     if (ferror(f)) {
         perror("read error");
+        status = EXIT_FAILURE;
+    } else if (parse_error) {
+        fprintf(stderr, "Failed to parse input\n");
+        status = EXIT_FAILURE;
     }
 
-    fclose(f);
-    return 0;
+    if (fclose(f) == EOF) {
+        perror("close error");
+        status = EXIT_FAILURE;
+    }
+
+    if (status == EXIT_SUCCESS) {
+        solve(start, end);
+    }
+
+    return status;
 }
 
 static void evaluate(long n, bool *has_two_repeat, bool *has_any_repeat, bool *is_increasing) {
