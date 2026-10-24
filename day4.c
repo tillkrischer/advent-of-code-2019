@@ -35,38 +35,50 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-static bool is_valid(long n) {
-    // printf("number: %ld\n", n);
-
-    bool has_repeat = false;
-    bool is_increasing = true;
-
-    while (n >= 10) {
-        long a = n % 10;
-        long b = (n/10) % 10;
+static void evaluate(long n, bool *has_two_repeat, bool *has_any_repeat, bool *is_increasing) {
+    *is_increasing = true;
+    *has_any_repeat = false;
+    *has_two_repeat = false;
+    long curr_repeat_length = 1;
+    long a = n % 10;
+    n /= 10;
+    long b = n % 10;
+    while (n > 0) {
         if (a == b) {
-            has_repeat = true;
+            *has_any_repeat = true;
+            curr_repeat_length++;
+        } else {
+            if (curr_repeat_length == 2) {
+                *has_two_repeat = true;
+            }
+            curr_repeat_length = 1;
         }
         if (a < b) {
-            is_increasing = false;
+            *is_increasing = false;
         }
         n /= 10;
+        a = b;
+        b = n % 10;
     }
-
-    // printf("has_repeat: %d is_increasing: %d\n", has_repeat, is_increasing);
-
-    return has_repeat && is_increasing;
+    if (curr_repeat_length == 2) {
+        *has_two_repeat = true;
+    }
 }
 
-
 static void solve(long start, long end) {
-    long count = 0;
+    long part1 = 0, part2 = 0;
     for (long i = start; i <= end; i++) {
-        if(is_valid(i)) {
-            count++;
+        bool has_two_repeat, has_any_repeat, is_increasing;
+        evaluate(i, &has_two_repeat, &has_any_repeat, &is_increasing);
+        if (is_increasing && has_any_repeat) {
+            part1++;
+        }
+        if (is_increasing && has_two_repeat) {
+            part2++;
         }
     }
-    printf("%ld\n", count);
+    printf("%ld\n", part1);
+    printf("%ld\n", part2);
 }
 
 static int parse_file(FILE *f, long *start, long *end) {
