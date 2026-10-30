@@ -1,5 +1,6 @@
 *.txt
 *.o
+*.dSYM/
 day[1-9]
 day1[0-9]
 day2[0-5]

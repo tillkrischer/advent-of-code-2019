@@ -1,9 +1,10 @@
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
 #include <limits.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stddef.h>
+#include <string.h>
 
 static int parse_file(FILE *f, long **program);
 static int solve(long *program);
@@ -43,7 +44,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (status == EXIT_SUCCESS) {
-        solve(program);
+        status = solve(program);
     }
     arrfree(program);
 
@@ -65,7 +66,6 @@ static int parse_file(FILE *f, long **program) {
             return 1;
         }
     }
-    return 0;
 }
 
 static long get_operand(const long *program, long ip, int position) {
@@ -75,18 +75,20 @@ static long get_operand(const long *program, long ip, int position) {
     }
     ParameterMode mode = value % 10;
     if (mode == IMMEDIATE) {
-        return program[ip+position];
+        return program[ip + position];
     } else {
-        return program[program[ip+position]];
+        return program[program[ip + position]];
     }
 }
 
-static int evaluate(const long *original_program, const long *input, long **output) {
+static int evaluate(const long *original_program, const long *input,
+                    long **output) {
     ptrdiff_t count = arrlen(original_program);
     long *program = NULL;
     arrsetlen(program, count);
-    memcpy(program, original_program, count * sizeof(long));
+    memcpy(program, original_program, count * sizeof(*program));
 
+    int status = EXIT_FAILURE;
     long ip = 0, input_p = 0;
     while (ip < count) {
         long value = program[ip];
@@ -159,15 +161,18 @@ static int evaluate(const long *original_program, const long *input, long **outp
             ip += 4;
             break;
         case 99:
-            return 0;
+            status = EXIT_SUCCESS;
+            goto cleanup;
         default:
-            printf("unknown op %ld\n", opcode);
-            ip += 1;
-            break;
+            fprintf(stderr, "Unknown opcode %ld at position %ld\n", opcode, ip);
+            goto cleanup;
         }
     }
+    fprintf(stderr, "Program ended without opcode 99\n");
+
+cleanup:
     arrfree(program);
-    return 0;
+    return status;
 }
 
 static int solve(long *program) {
@@ -175,19 +180,36 @@ static int solve(long *program) {
     long *output = NULL;
 
     arrput(input, 1);
-    evaluate(program, input, &output);
-    long part1 = output[arrlen(output)-1];
+    int status = evaluate(program, input, &output);
+    if (status != EXIT_SUCCESS) {
+        goto cleanup;
+    }
+    if (arrlen(output) == 0) {
+        fprintf(stderr, "Part 1 produced no output\n");
+        status = EXIT_FAILURE;
+        goto cleanup;
+    }
+    long part1 = output[arrlen(output) - 1];
     printf("%ld\n", part1);
 
     arrfree(input);
     arrfree(output);
 
     arrput(input, 5);
-    evaluate(program, input, &output);
-    long part2 = output[arrlen(output)-1];
+    status = evaluate(program, input, &output);
+    if (status != EXIT_SUCCESS) {
+        goto cleanup;
+    }
+    if (arrlen(output) == 0) {
+        fprintf(stderr, "Part 2 produced no output\n");
+        status = EXIT_FAILURE;
+        goto cleanup;
+    }
+    long part2 = output[arrlen(output) - 1];
     printf("%ld\n", part2);
 
+cleanup:
     arrfree(input);
     arrfree(output);
-    return 0;
+    return status;
 }
