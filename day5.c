@@ -6,8 +6,7 @@
 #include <stddef.h>
 
 static int parse_file(FILE *f, long **program);
-static void print_program(const long *program);
-static int solve(long **program);
+static int solve(long *program);
 
 typedef enum {
     POSITIONAL,
@@ -44,23 +43,11 @@ int main(int argc, char *argv[]) {
     }
 
     if (status == EXIT_SUCCESS) {
-        // print_program(program);
-        solve(&program);
-        // print_program(program);
+        solve(program);
     }
     arrfree(program);
 
     return status;
-}
-
-static void print_program(const long *program) {
-    for (ptrdiff_t i = 0; i < arrlen(program); i++) {
-        if (i != 0) {
-            putchar(',');
-        }
-        printf("%ld", program[i]);
-    }
-    putchar('\n');
 }
 
 static int parse_file(FILE *f, long **program) {
@@ -87,7 +74,6 @@ static long get_operand(const long *program, long ip, int position) {
         value /= 10;
     }
     ParameterMode mode = value % 10;
-    // printf("pos %d mode: %d\n", position, mode);
     if (mode == IMMEDIATE) {
         return program[ip+position];
     } else {
@@ -95,51 +81,113 @@ static long get_operand(const long *program, long ip, int position) {
     }
 }
 
-static int solve(long **program) {
-   long ip = 0;
-   while (ip < arrlen(*program)) {
-       // printf("========== ip: %ld\n", ip);
-       long value = (*program)[ip];
-       long opcode = value % 100;
-       long op1, op2, addr;
+static int evaluate(const long *original_program, const long *input, long **output) {
+    ptrdiff_t count = arrlen(original_program);
+    long *program = NULL;
+    arrsetlen(program, count);
+    memcpy(program, original_program, count * sizeof(long));
 
-       switch (opcode) {
-       case 1:
-           op1 = get_operand(*program, ip, 1);
-           op2 = get_operand(*program, ip, 2);
-           addr = (*program)[ip+3];
-           // printf("add %ld + %ld\n", op1, op2);
-           (*program)[addr] = op1 + op2;
-           ip += 4;
-           break;
-       case 2:
-           op1 = get_operand(*program, ip, 1);
-           op2 = get_operand(*program, ip, 2);
-           addr = (*program)[ip+3];
-           // printf("mul %ld * %ld\n", op1, op2);
-           (*program)[addr] = op1 * op2;
-           ip += 4;
-           break;
-       case 3:
-           addr = (*program)[ip+1];
-           printf("input: 1\n");
-           (*program)[addr] = 1;
-           ip += 2;
-           break;
-       case 4:
-           op1 = get_operand(*program, ip, 1);
-           printf("output: %ld\n", op1);
-           ip += 2;
-           break;
-       case 99:
-           printf("halt\n");
-           return 0;
-       default:
-           printf("unknown op %ld\n", opcode);
-           ip += 1;
-           break;
+    long ip = 0, input_p = 0;
+    while (ip < count) {
+        long value = program[ip];
+        long opcode = value % 100;
+        long op1, op2, addr;
 
-       }
-   }
-   return 0;
+        switch (opcode) {
+        case 1:
+            op1 = get_operand(program, ip, 1);
+            op2 = get_operand(program, ip, 2);
+            addr = program[ip + 3];
+            program[addr] = op1 + op2;
+            ip += 4;
+            break;
+        case 2:
+            op1 = get_operand(program, ip, 1);
+            op2 = get_operand(program, ip, 2);
+            addr = program[ip + 3];
+            program[addr] = op1 * op2;
+            ip += 4;
+            break;
+        case 3:
+            addr = program[ip + 1];
+            program[addr] = input[input_p++];
+            ip += 2;
+            break;
+        case 4:
+            op1 = get_operand(program, ip, 1);
+            arrput(*output, op1);
+            ip += 2;
+            break;
+        case 5:
+            op1 = get_operand(program, ip, 1);
+            op2 = get_operand(program, ip, 2);
+            if (op1 != 0) {
+                ip = op2;
+            } else {
+                ip += 3;
+            }
+            break;
+        case 6:
+            op1 = get_operand(program, ip, 1);
+            op2 = get_operand(program, ip, 2);
+            if (op1 == 0) {
+                ip = op2;
+            } else {
+                ip += 3;
+            }
+            break;
+        case 7:
+            op1 = get_operand(program, ip, 1);
+            op2 = get_operand(program, ip, 2);
+            addr = program[ip + 3];
+            if (op1 < op2) {
+                program[addr] = 1;
+            } else {
+                program[addr] = 0;
+            }
+            ip += 4;
+            break;
+        case 8:
+            op1 = get_operand(program, ip, 1);
+            op2 = get_operand(program, ip, 2);
+            addr = program[ip + 3];
+            if (op1 == op2) {
+                program[addr] = 1;
+            } else {
+                program[addr] = 0;
+            }
+            ip += 4;
+            break;
+        case 99:
+            return 0;
+        default:
+            printf("unknown op %ld\n", opcode);
+            ip += 1;
+            break;
+        }
+    }
+    arrfree(program);
+    return 0;
+}
+
+static int solve(long *program) {
+    long *input = NULL;
+    long *output = NULL;
+
+    arrput(input, 1);
+    evaluate(program, input, &output);
+    long part1 = output[arrlen(output)-1];
+    printf("%ld\n", part1);
+
+    arrfree(input);
+    arrfree(output);
+
+    arrput(input, 5);
+    evaluate(program, input, &output);
+    long part2 = output[arrlen(output)-1];
+    printf("%ld\n", part2);
+
+    arrfree(input);
+    arrfree(output);
+    return 0;
 }
