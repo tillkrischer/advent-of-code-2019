@@ -113,14 +113,30 @@ static void solve(Parent *parents) {
 static int parse_file(FILE *f, Parent **parents) {
     char line[100];
     while (fgets(line, sizeof(line), f) != NULL) {
-        char *parent, *child;
-        parent = strtok(line, ")\r\n");
-        child = strtok(NULL, ")\r\n");
-        if (parent == NULL || child == NULL) {
+        size_t len = strlen(line);
+        if (len == sizeof(line) - 1 && line[len - 1] != '\n') {
+            int next = fgetc(f);
+            if (next != '\n' && next != EOF) {
+                fprintf(stderr, "Orbit line too long\n");
+                return EXIT_FAILURE;
+            }
+        }
+        if (len > 0 && line[len - 1] == '\n') {
+            line[--len] = '\0';
+        }
+        if (len > 0 && line[len - 1] == '\r') {
+            line[--len] = '\0';
+        }
+
+        char *separator = strchr(line, ')');
+        if (separator == NULL || separator == line || separator[1] == '\0' ||
+            strchr(separator + 1, ')') != NULL || strchr(line, '\r') != NULL) {
             fprintf(stderr, "Failed to parse orbit\n");
             return EXIT_FAILURE;
         }
-        char *parent_dup = strdup(parent);
+        *separator = '\0';
+        char *child = separator + 1;
+        char *parent_dup = strdup(line);
         if (parent_dup == NULL) {
             perror("strdup");
             return EXIT_FAILURE;
