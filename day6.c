@@ -1,8 +1,6 @@
-#include <iso646.h>
 #include <string.h>
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
-#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +16,7 @@ typedef struct {
     long value;
 } Distance;
 
-static void parse_file(FILE *f, Parent **parents);
+static int parse_file(FILE *f, Parent **parents);
 static void solve(Parent *parents);
 
 int main(int argc, char *argv[]) {
@@ -28,24 +26,35 @@ int main(int argc, char *argv[]) {
     }
 
     FILE *f = fopen(argv[1], "r");
-    assert(f != NULL);
+    if (f == NULL) {
+        perror(argv[1]);
+        return EXIT_FAILURE;
+    }
 
     Parent *parents = NULL;
     sh_new_strdup(parents);
 
-    parse_file(f, &parents);
+    int status = parse_file(f, &parents);
 
-    assert(!ferror(f));
-    assert(fclose(f) != EOF);
+    if (ferror(f)) {
+        perror("read error");
+        status = EXIT_FAILURE;
+    }
+    if (fclose(f) == EOF) {
+        perror("close error");
+        status = EXIT_FAILURE;
+    }
 
-    solve(parents);
+    if (status == EXIT_SUCCESS) {
+        solve(parents);
+    }
 
     for (ptrdiff_t i = 0; i < shlen(parents); i++) {
         free(parents[i].value);
     }
     shfree(parents);
 
-    return 0;
+    return status;
 }
 
 static char *get_common_parent(Parent *parents, char *a, char *b) {
@@ -101,15 +110,22 @@ static void solve(Parent *parents) {
     shfree(distances);
 }
 
-static void parse_file(FILE *f, Parent **parents) {
+static int parse_file(FILE *f, Parent **parents) {
     char line[100];
     while (fgets(line, sizeof(line), f) != NULL) {
         char *parent, *child;
         parent = strtok(line, ")\r\n");
         child = strtok(NULL, ")\r\n");
-        assert(child != NULL);
+        if (parent == NULL || child == NULL) {
+            fprintf(stderr, "Failed to parse orbit\n");
+            return EXIT_FAILURE;
+        }
         char *parent_dup = strdup(parent);
-        assert(parent_dup != NULL);
+        if (parent_dup == NULL) {
+            perror("strdup");
+            return EXIT_FAILURE;
+        }
         shput(*parents, child, parent_dup);
     }
+    return EXIT_SUCCESS;
 }
