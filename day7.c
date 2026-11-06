@@ -6,14 +6,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int parse_file(FILE *f, long **program);
-static int solve(long *program);
-// static void print_program(long *program);
-
 typedef enum {
-    POSITIONAL,
-    IMMEDIATE,
-} ParameterMode;
+    INITIALIZED,
+    RUNNING,
+    HALTED,
+    WAITING_FOR_INPUT
+} ProgramState;
+
+typedef struct {
+    long *instructions;
+    long *inputs;
+    long *outputs;
+    ProgramState state;
+    long ip;
+} Program;
+
+static int parse_file(FILE *f, long **program);
+static void solve(long *program);
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -45,25 +54,13 @@ int main(int argc, char *argv[]) {
     }
 
     if (status == EXIT_SUCCESS) {
-        // print_program(program);
-        status = solve(program);
+        solve(program);
     }
 
-
-
     arrfree(program);
-
     return status;
 }
 
-// static void print_program(long *program) {
-//     for (long i = 0; i < arrlen(program); ++i ) {
-//         if (i != 0) printf(",");
-//         printf("%ld", program[i]);
-//     }
-//     printf("\n");
-// }
-//
 static int parse_file(FILE *f, long **program) {
     size_t capacity = 1024 * 1024;
     char *buffer = malloc(capacity);
@@ -89,134 +86,164 @@ static long get_operand(const long *program, long ip, int position) {
     for (long i = 0; i < position + 1; i++) {
         value /= 10;
     }
-    ParameterMode mode = value % 10;
-    if (mode == IMMEDIATE) {
+    bool immediate = value % 10;
+    if (immediate) {
         return program[ip + position];
     } else {
         return program[program[ip + position]];
     }
 }
 
-static int evaluate(const long *original_program, const long *input,
-                    long **output) {
-    ptrdiff_t count = arrlen(original_program);
-    long *program = NULL;
-    arrsetlen(program, count);
-    memcpy(program, original_program, count * sizeof(*program));
-
-    int status = EXIT_FAILURE;
-    long ip = 0, input_p = 0;
-    while (ip < count) {
-        long value = program[ip];
+static int evaluate_program(Program *program) {
+    long count = arrlen(program->instructions);
+    program->state = RUNNING;
+    while (program->ip < count) {
+        long value = program->instructions[program->ip];
         long opcode = value % 100;
         long op1, op2, addr;
 
         switch (opcode) {
         case 1:
-            op1 = get_operand(program, ip, 1);
-            op2 = get_operand(program, ip, 2);
-            addr = program[ip + 3];
-            program[addr] = op1 + op2;
-            ip += 4;
+            op1 = get_operand(program->instructions, program->ip, 1);
+            op2 = get_operand(program->instructions, program->ip, 2);
+            addr = program->instructions[program->ip + 3];
+            program->instructions[addr] = op1 + op2;
+            program->ip += 4;
             break;
         case 2:
-            op1 = get_operand(program, ip, 1);
-            op2 = get_operand(program, ip, 2);
-            addr = program[ip + 3];
-            program[addr] = op1 * op2;
-            ip += 4;
+            op1 = get_operand(program->instructions, program->ip, 1);
+            op2 = get_operand(program->instructions, program->ip, 2);
+            addr = program->instructions[program->ip + 3];
+            program->instructions[addr] = op1 * op2;
+            program->ip += 4;
             break;
         case 3:
-            addr = program[ip + 1];
-            program[addr] = input[input_p++];
-            ip += 2;
+            if (arrlen(program->inputs) == 0) {
+                program->state = WAITING_FOR_INPUT;
+                return EXIT_SUCCESS;
+            }
+            addr = program->instructions[program->ip + 1];
+            program->instructions[addr] = program->inputs[0];
+            arrdel(program->inputs, 0);
+            program->ip += 2;
             break;
         case 4:
-            op1 = get_operand(program, ip, 1);
-            arrput(*output, op1);
-            ip += 2;
+            op1 = get_operand(program->instructions, program->ip, 1);
+            arrput(program->outputs, op1);
+            program->ip += 2;
             break;
         case 5:
-            op1 = get_operand(program, ip, 1);
-            op2 = get_operand(program, ip, 2);
+            op1 = get_operand(program->instructions, program->ip, 1);
+            op2 = get_operand(program->instructions, program->ip, 2);
             if (op1 != 0) {
-                ip = op2;
+                program->ip = op2;
             } else {
-                ip += 3;
+                program->ip += 3;
             }
             break;
         case 6:
-            op1 = get_operand(program, ip, 1);
-            op2 = get_operand(program, ip, 2);
+            op1 = get_operand(program->instructions, program->ip, 1);
+            op2 = get_operand(program->instructions, program->ip, 2);
             if (op1 == 0) {
-                ip = op2;
+                program->ip = op2;
             } else {
-                ip += 3;
+                program->ip += 3;
             }
             break;
         case 7:
-            op1 = get_operand(program, ip, 1);
-            op2 = get_operand(program, ip, 2);
-            addr = program[ip + 3];
+            op1 = get_operand(program->instructions, program->ip, 1);
+            op2 = get_operand(program->instructions, program->ip, 2);
+            addr = program->instructions[program->ip + 3];
             if (op1 < op2) {
-                program[addr] = 1;
+                program->instructions[addr] = 1;
             } else {
-                program[addr] = 0;
+                program->instructions[addr] = 0;
             }
-            ip += 4;
+            program->ip += 4;
             break;
         case 8:
-            op1 = get_operand(program, ip, 1);
-            op2 = get_operand(program, ip, 2);
-            addr = program[ip + 3];
+            op1 = get_operand(program->instructions, program->ip, 1);
+            op2 = get_operand(program->instructions, program->ip, 2);
+            addr = program->instructions[program->ip + 3];
             if (op1 == op2) {
-                program[addr] = 1;
+                program->instructions[addr] = 1;
             } else {
-                program[addr] = 0;
+                program->instructions[addr] = 0;
             }
-            ip += 4;
+            program->ip += 4;
             break;
         case 99:
-            status = EXIT_SUCCESS;
-            goto cleanup;
+            program->state = HALTED;
+            return EXIT_SUCCESS;
         default:
-            fprintf(stderr, "Unknown opcode %ld at position %ld\n", opcode, ip);
-            goto cleanup;
+            fprintf(stderr, "Unknown opcode %ld at position %ld\n", opcode, program->ip);
+            return EXIT_FAILURE;
         }
     }
     fprintf(stderr, "Program ended without opcode 99\n");
+    return EXIT_FAILURE;
+}
 
-cleanup:
-    arrfree(program);
-    return status;
+static Program init_program(long *original_instructions) {
+    Program new_program =  {
+     .instructions = NULL,
+     .inputs = NULL,
+     .outputs = NULL,
+     .state = INITIALIZED,
+     .ip = 0
+    };
+
+    ptrdiff_t count = arrlen(original_instructions);
+    arrsetlen(new_program.instructions, count);
+    memcpy(new_program.instructions, original_instructions, count * sizeof(*new_program.instructions));
+
+    return new_program;
+}
+
+static void free_program(Program program) {
+    arrfree(program.inputs);
+    arrfree(program.outputs);
+    arrfree(program.instructions);
 }
 
 static long get_signal(long *program, long phase_settings[5]) {
-    long *input = NULL;
-    long *output = NULL;
+    Program programs[5];
+    for (long i = 0; i < 5; ++i) {
+        programs[i] = init_program(program);
+        arrput(programs[i].inputs, phase_settings[i]);
+    }
+ 
     long signal = 0;
+    long i = 0;
+    while (true) {
+        assert(programs[i].state != HALTED);
+        arrput(programs[i].inputs, signal);
+        int status = evaluate_program(&programs[i]);
+        assert(status == EXIT_SUCCESS);
+        assert(arrlen(programs[i].outputs) == 1);
+        signal = programs[i].outputs[0];
+        arrpop(programs[i].outputs);
+
+        if (i == 4 && programs[4].state == HALTED) {
+            break;
+        }
+        i = (i + 1) % 5;
+    }
 
     for (long i = 0; i < 5; ++i) {
-        arrput(input, phase_settings[i]);
-        arrput(input, signal);
-        int status = evaluate(program, input, &output);
-        assert(status == EXIT_SUCCESS);
-        assert(arrlen(output) == 1);
-        signal = output[0];
-        arrfree(input);
-        arrfree(output);
+        free_program(programs[i]);
     }
     return signal;
 }
 
-void swap(long *a, long *b)
+static void swap(long *a, long *b)
 {
     int tmp = *a;
     *a = *b;
     *b = tmp;
 }
 
-void permutations( long *program, long *max_signal, long nums[5], long start)
+static void permutations(long *program, long *max_signal, long nums[5], long start)
 {
     if (start == 5) {
         long signal = get_signal(program, nums);
@@ -232,11 +259,14 @@ void permutations( long *program, long *max_signal, long nums[5], long start)
     }
 }
 
-static int solve(long *program) {
-    long max_signal = 0;
-    long phase_setting[5] = {0, 1, 2, 3, 4};
-    permutations(program,  &max_signal, phase_setting, 0);
-    printf("%ld\n", max_signal);
+static void solve(long *program) {
+    long part1 = 0;
+    long part2 = 0;
+    long phase_setting1[5] = {0, 1, 2, 3, 4};
+    long phase_setting2[5] = {5, 6, 7, 8, 9};
+    permutations(program, &part1, phase_setting1, 0);
+    permutations(program, &part2, phase_setting2, 0);
 
-    return 0;
+    printf("%ld\n", part1);
+    printf("%ld\n", part2);
 }
